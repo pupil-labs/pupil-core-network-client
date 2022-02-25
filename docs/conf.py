@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 
-extensions = ['sphinx.ext.autodoc', 'jaraco.packaging.sphinx', 'rst.linker']
+extensions = [
+    'sphinx.ext.autodoc',
+    'jaraco.packaging.sphinx',
+    'rst.linker',
+    'sphinx.ext.viewcode',
+]
 
 master_doc = "index"
 
@@ -33,3 +38,4 @@ extensions += ['sphinx.ext.intersphinx']
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
 }
+html_theme = "furo"
