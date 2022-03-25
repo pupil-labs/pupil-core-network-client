@@ -1,3 +1,8 @@
+1.0.0a3 (2020-03-25)
+####################
+- Add :py:meth:`pupil_labs.pupil_core_network_client.Device.request_plugin_start_eye_process`
+  and accompanying example
+
 1.0.0a2 (2020-02-25)
 ####################
 

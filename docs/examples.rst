@@ -5,6 +5,10 @@
 Example usage
 *************
 
+To run the examples, install the package using the ``examples`` extras requirement::
+
+   pip install -e pupil-core-network-client[examples]
+
 Connect, and start and stop a recording
 """""""""""""""""""""""""""""""""""""""
 
@@ -28,3 +32,14 @@ Start the Annotation Plugin and send custom annotions
    :language: python
    :linenos:
    :emphasize-lines: 12,19,26-28,35-37
+
+Stream Video to Pupil Capture
+"""""""""""""""""""""""""""""
+
+This example shows how start world and eye plugins and streaming BGR data to Pupil
+Capture's HMD Streaming backend.
+
+.. literalinclude:: ../examples/hmd_streaming.py
+   :language: python
+   :linenos:
+   :emphasize-lines: 12,16,18-20,38

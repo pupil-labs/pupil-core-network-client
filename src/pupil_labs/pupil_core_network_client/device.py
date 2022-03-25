@@ -4,6 +4,11 @@ import time
 from collections.abc import Sequence
 from typing import Callable, Dict, NamedTuple, Optional, Type, TypeVar
 
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal
+
 import msgpack
 import zmq
 
@@ -92,6 +97,21 @@ class Device:
         self, plugin_class_name: str, args: Optional[Dict] = None
     ) -> str:
         notification = {"subject": "start_plugin", "name": plugin_class_name}
+        if args is not None:
+            notification["args"] = args
+        return self.send_notification(notification)
+
+    @ensure_connected
+    def request_plugin_start_eye_process(
+        self, eye_id: Literal[0, 1], plugin_class_name: str, args: Optional[Dict] = None
+    ) -> str:
+        if eye_id not in (0, 1):
+            raise ValueError(f"Unexpected `eye_id`: {eye_id}")
+        notification = {
+            "subject": "start_eye_plugin",
+            "target": f"eye{eye_id}",
+            "name": plugin_class_name,
+        }
         if args is not None:
             notification["args"] = args
         return self.send_notification(notification)
