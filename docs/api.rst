@@ -40,3 +40,13 @@ attibute.
     :members:
     :undoc-members:
     :show-inheritance:
+
+Subscriptions are implemented in :py:mod:`pupil_labs.pupil_core_network_client.subscription`.
+Use :py:meth:`pupil_labs.pupil_core_network_client.Device.subscribe` and
+:py:meth:`pupil_labs.pupil_core_network_client.Device.subscribe_in_background` as entry
+points.
+
+.. automodule:: pupil_labs.pupil_core_network_client.subscription
+    :members:
+    :undoc-members:
+    :show-inheritance:

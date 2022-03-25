@@ -33,6 +33,15 @@ Start the Annotation Plugin and send custom annotions
    :linenos:
    :emphasize-lines: 12,19,26-28,35-37
 
+Stream Video From Pupil Capture
+"""""""""""""""""""""""""""""""
+
+.. literalinclude:: ../examples/receive_scene_video_frames.py
+   :language: python
+   :linenos:
+   :emphasize-lines: 10,11-13,16,18,20-21
+
+
 Stream Video to Pupil Capture
 """""""""""""""""""""""""""""
 

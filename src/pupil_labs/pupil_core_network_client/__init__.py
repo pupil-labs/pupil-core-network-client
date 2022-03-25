@@ -11,12 +11,17 @@ except PackageNotFoundError:
     # package is not installed
     __version__ = None
 
-from .device import ClockFunction, ClockOffsetStatistics, Device, NotConnectedError
+from .decorators import NotConnectedError
+from .device import ClockFunction, ClockOffsetStatistics, Device
+from .subscription import BackgroundSubscription, Message, Subscription
 
 __all__ = [
     "__version__",
     "ClockFunction",
     "ClockOffsetStatistics",
     "Device",
+    "Message",
     "NotConnectedError",
+    "Subscription",
+    "BackgroundSubscription",
 ]

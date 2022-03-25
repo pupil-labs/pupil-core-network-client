@@ -1,8 +1,9 @@
-import functools
+from __future__ import annotations
+
+import logging
 import statistics
 import time
-from collections.abc import Sequence
-from typing import Callable, Dict, NamedTuple, Optional, Type, TypeVar
+from typing import Callable, NamedTuple, Sequence, TypeVar
 
 try:
     from typing import Literal
@@ -12,23 +13,15 @@ except ImportError:
 import msgpack
 import zmq
 
+from . import __version__
+from .decorators import ensure_connected
+from .subscription import BackgroundSubscription, Subscription
+
 ClockFunction = Callable[[], float]
 T = TypeVar('T')
 
 
-def ensure_connected(fn):
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        # requires isinstance(args[0], Device)
-        if not args[0].is_connected:
-            raise NotConnectedError
-        return fn(*args, **kwargs)
-
-    return wrapper
-
-
-class NotConnectedError(RuntimeError):
-    pass
+logger = logging.getLogger(__name__)
 
 
 class Device:
@@ -56,6 +49,8 @@ class Device:
             self.disconnect()
         self._req_socket = zmq.Context.instance().socket(zmq.REQ)
         self._req_socket.connect(f"tcp://{self.address}:{self.port}")
+        self._announce(f"connected.v{__version__}")
+        self._update_ipc_backend_ports()
         self.estimate_client_to_remote_clock_offset()
 
     def disconnect(self):
@@ -76,7 +71,7 @@ class Device:
         return self._send_recv_command("v")
 
     @ensure_connected
-    def request_recording_start(self, session_name: Optional[str] = None) -> str:
+    def request_recording_start(self, session_name: str | None = None) -> str:
         cmd = f"R {session_name}" if session_name else "R"
         return self._send_recv_command(cmd)
 
@@ -94,7 +89,7 @@ class Device:
 
     @ensure_connected
     def request_plugin_start(
-        self, plugin_class_name: str, args: Optional[Dict] = None
+        self, plugin_class_name: str, args: dict | None = None
     ) -> str:
         notification = {"subject": "start_plugin", "name": plugin_class_name}
         if args is not None:
@@ -103,7 +98,7 @@ class Device:
 
     @ensure_connected
     def request_plugin_start_eye_process(
-        self, eye_id: Literal[0, 1], plugin_class_name: str, args: Optional[Dict] = None
+        self, eye_id: Literal[0, 1], plugin_class_name: str, args: dict | None = None
     ) -> str:
         if eye_id not in (0, 1):
             raise ValueError(f"Unexpected `eye_id`: {eye_id}")
@@ -117,7 +112,7 @@ class Device:
         return self.send_notification(notification)
 
     @ensure_connected
-    def send_notification(self, notification: Dict) -> str:
+    def send_notification(self, notification: dict) -> str:
         """Sends ``notification`` to Pupil Remote"""
         if "subject" not in notification:
             raise ValueError("`notification` requires a subject field")
@@ -135,7 +130,7 @@ class Device:
 
     @ensure_connected
     def send_annotation(
-        self, label: str, timestamp: Optional[float] = None, **kwargs
+        self, label: str, timestamp: float | None = None, **kwargs
     ) -> str:
         if timestamp is None:
             timestamp = self.current_pupil_time()
@@ -144,7 +139,7 @@ class Device:
         )
 
     @ensure_connected
-    def send_message(self, payload: Dict) -> str:
+    def send_message(self, payload: dict) -> str:
         if "topic" not in payload:
             raise ValueError("`payload` needs to contain `topic` field")
         if "__raw_data__" not in payload:
@@ -168,7 +163,7 @@ class Device:
     @ensure_connected
     def estimate_client_to_remote_clock_offset(
         self, num_measurements: int = 10
-    ) -> "ClockOffsetStatistics":
+    ) -> ClockOffsetStatistics:
         """Returns the clock offset after multiple measurements to reduce the effect
         of varying network delay.
 
@@ -185,6 +180,7 @@ class Device:
         Description taken and code adopted from `pupil helpers remote_annotations.py
         <https://github.com/pupil-labs/pupil-helpers/blob/6e2cd2fc28c8aa954bfba068441dfb582846f773/python/remote_annotations.py#L161>`__
         """
+        self._announce(f"clock_offset_estimation.x{num_measurements}")
         if num_measurements < 2:
             raise ValueError("Needs to perform at least two measurement")
 
@@ -221,7 +217,29 @@ class Device:
         clock_offset = pupil_time - local_time
         return clock_offset
 
-    def _send_recv_command(self, cmd: str, type_: Type[T] = str) -> T:
+    @ensure_connected
+    def subscribe(self, topics: str | Sequence[str]) -> Subscription:
+        self._announce(f"subscription.{topics}")
+        return Subscription(self.address, port=self.ipc_sub_port, topics=topics)
+
+    @ensure_connected
+    def subscribe_in_background(
+        self, topics: str | Sequence[str], buffer_size: int | None = None
+    ) -> Subscription:
+        self._announce(f"subscription.{topics}")
+        return BackgroundSubscription(
+            self.address, port=self.ipc_sub_port, topics=topics, buffer_size=buffer_size
+        )
+
+    def _announce(self, announcement: str):
+        prefix = "pupil_labs.pupil_core_network_client."
+        self.send_notification({"subject": prefix + announcement})
+
+    def _update_ipc_backend_ports(self):
+        self.ipc_pub_port = int(self._send_recv_command("PUB_PORT"))
+        self.ipc_sub_port = int(self._send_recv_command("SUB_PORT"))
+
+    def _send_recv_command(self, cmd: str, type_: type[T] = str) -> T:
         self._req_socket.send_string(cmd)
         return type_(self._req_socket.recv_string())
 

@@ -3,6 +3,11 @@
 - Add :py:meth:`pupil_labs.pupil_core_network_client.Device.request_plugin_start_eye_process`
   and accompanying example
 - Remove ``setup.py``; requires pip 21.2+ for editable install
+- Add :py:class:`pupil_labs.pupil_core_network_client.subscription.Subscription`,
+  :py:class:`pupil_labs.pupil_core_network_client.subscription.BackgroundSubscription`,
+  :py:meth:`pupil_labs.pupil_core_network_client.Device.subscribe`,
+  :py:meth:`pupil_labs.pupil_core_network_client.Device.subscribe_in_background`,
+  :py:class:`pupil_labs.pupil_core_network_client.subscription.Message`, and accompanying example
 
 1.0.0a2 (2020-02-25)
 ####################
