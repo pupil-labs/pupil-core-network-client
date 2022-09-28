@@ -1,3 +1,7 @@
+1.0.0a5 (2022-09-28)
+####################
+- Fix readthedocs build
+
 1.0.0a4 (2022-09-28)
 ####################
 - Add :py:meth:`pupil_labs.pupil_core_network_client.Device.high_frequency_message_sending`,
