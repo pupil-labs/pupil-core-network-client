@@ -51,4 +51,4 @@ Capture's HMD Streaming backend.
 .. literalinclude:: ../examples/hmd_streaming.py
    :language: python
    :linenos:
-   :emphasize-lines: 12,16,18-20,38
+   :emphasize-lines: 13,17,19-21,27,30-36
