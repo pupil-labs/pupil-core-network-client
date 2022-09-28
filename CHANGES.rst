@@ -4,6 +4,9 @@
   a context manager that makes :py:meth:`pupil_labs.pupil_core_network_client.Device.send_message`
   more efficient by connecting directly to the IPC backend't PUB port instead of relaying
   messages via Pupil Remote.
+- Experimental: Add opt-in auto-reconnect functionality to
+  :py:class:`pupil_labs.pupil_core_network_client.Device` via ``should_auto_reconnect``
+  argument.
 
 1.0.0a3 (2022-03-25)
 ####################
