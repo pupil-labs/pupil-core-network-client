@@ -13,6 +13,7 @@ except ImportError:
 
 import msgpack
 import zmq
+from zmq.utils.monitor import recv_monitor_message
 
 from . import __version__
 from .decorators import ensure_connected
@@ -31,6 +32,7 @@ class Device:
         address: str = "127.0.0.1",
         port: int = 50020,
         client_clock: ClockFunction = time.monotonic,
+        should_auto_reconnect: bool = False,
     ) -> None:
         self.client_clock: ClockFunction = client_clock
         "Client clock function. Returns time in seconds."
@@ -38,18 +40,46 @@ class Device:
         self.port = port
         self.clock_offset_statistics: ClockOffsetStatistics = None
         "Statistic results of the clock offset estimation"
-        self._req_socket = None
-        self._pub_socket = None
+        self._req_socket: zmq.Socket | None = None
+        self._pub_socket: zmq.Socket | None = None
+
+        self._should_auto_reconnect = should_auto_reconnect
+        self._req_monitor: zmq.Socket | None = None
+        self._previously_disconnected = False
+        self._currently_reconnecting = False
         self.connect()
 
     @property
     def is_connected(self):
+        if self._req_monitor and not self._currently_reconnecting:
+            should_reconnect = False
+            while self._req_monitor.get(zmq.EVENTS) & zmq.POLLIN:
+                status = recv_monitor_message(self._req_monitor)
+                if status["event"] == zmq.EVENT_CONNECTED:
+                    should_reconnect = True
+                elif status["event"] == zmq.EVENT_DISCONNECTED:
+                    self._previously_disconnected = True
+
+            if should_reconnect and self._previously_disconnected:
+                logger.debug("Reconnecting...")
+                self._currently_reconnecting = True
+                self.connect()
+                if self._pub_socket:
+                    self._teardown_pub_socket()
+                    self._setup_pub_socket()
+                self._currently_reconnecting = False
+                self._previously_disconnected = False
+                logger.debug("Reconnected")
+
         return self._req_socket is not None
 
     def connect(self):
         if self.is_connected:
             self.disconnect()
-        self._req_socket = zmq.Context.instance().socket(zmq.REQ)
+
+        self._req_socket: zmq.Socket = zmq.Context.instance().socket(zmq.REQ)
+        if self._should_auto_reconnect:
+            self._req_monitor = self._req_socket.get_monitor_socket()
         self._req_socket.connect(f"tcp://{self.address}:{self.port}")
         self._announce(f"connected.v{__version__}")
         self._update_ipc_backend_ports()
@@ -57,6 +87,8 @@ class Device:
 
     def disconnect(self):
         if self._req_socket:
+            self._req_socket.disable_monitor()
+            self._req_monitor = None
             self._req_socket.close()
             self._req_socket = None
 
@@ -80,12 +112,18 @@ class Device:
                 device.send_message(...)
         """
         try:
-            self._pub_socket = zmq.Context.instance().socket(zmq.PUB)
-            self._pub_socket.connect(f"tcp://{self.address}:{self.ipc_pub_port}")
+            self._setup_pub_socket()
             yield
         finally:
-            self._pub_socket.close()
-            self._pub_socket = None
+            self._teardown_pub_socket()
+
+    def _setup_pub_socket(self):
+        self._pub_socket = zmq.Context.instance().socket(zmq.PUB)
+        self._pub_socket.connect(f"tcp://{self.address}:{self.ipc_pub_port}")
+
+    def _teardown_pub_socket(self):
+        self._pub_socket.close()
+        self._pub_socket = None
 
     @ensure_connected
     def current_pupil_time(self) -> float:
