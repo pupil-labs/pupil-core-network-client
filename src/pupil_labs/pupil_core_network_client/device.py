@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 import statistics
 import time
@@ -38,6 +39,7 @@ class Device:
         self.clock_offset_statistics: ClockOffsetStatistics = None
         "Statistic results of the clock offset estimation"
         self._req_socket = None
+        self._pub_socket = None
         self.connect()
 
     @property
@@ -57,6 +59,33 @@ class Device:
         if self._req_socket:
             self._req_socket.close()
             self._req_socket = None
+
+    @contextlib.contextmanager
+    @ensure_connected
+    def high_frequency_message_sending(self):
+        """Context manager that improves the efficiency of :py:meth:`.send_message`
+
+        Instead of sending the message to Pupil Remote via the REQ socket and waiting
+        for a response, the device will use a PUB socket connected directly to the Pupil
+        Capture IPC. As a result, the client is able to send messages with a
+        considerable higher frequency, e.g. streaming scene and eye videos to the HMD
+        video backend.
+
+        Example:
+
+        .. code-block:: python
+
+            device = Device()
+            with device.high_frequency_message_sending():
+                device.send_message(...)
+        """
+        try:
+            self._pub_socket = zmq.Context.instance().socket(zmq.PUB)
+            self._pub_socket.connect(f"tcp://{self.address}:{self.ipc_pub_port}")
+            yield
+        finally:
+            self._pub_socket.close()
+            self._pub_socket = None
 
     @ensure_connected
     def current_pupil_time(self) -> float:
@@ -142,23 +171,29 @@ class Device:
     def send_message(self, payload: dict) -> str:
         if "topic" not in payload:
             raise ValueError("`payload` needs to contain `topic` field")
+
+        socket, wait_for_response = (
+            (self._pub_socket, False) if self._pub_socket else (self._req_socket, True)
+        )
         if "__raw_data__" not in payload:
             # IMPORTANT: serialize first! Else if there is an exception
             # the next message will have an extra prepended frame
             serialized_payload = msgpack.packb(payload, use_bin_type=True)
-            self._req_socket.send_string(payload["topic"], flags=zmq.SNDMORE)
-            self._req_socket.send(serialized_payload)
+            socket.send_string(payload["topic"], flags=zmq.SNDMORE)
+            socket.send(serialized_payload)
         else:
             extra_frames = payload.pop("__raw_data__")
             if not isinstance(extra_frames, Sequence):
                 raise ValueError("`payload['__raw_data__'] needs to be a sequence`")
-            self._req_socket.send_string(payload["topic"], flags=zmq.SNDMORE)
+            socket.send_string(payload["topic"], flags=zmq.SNDMORE)
             serialized_payload = msgpack.packb(payload, use_bin_type=True)
-            self._req_socket.send(serialized_payload, flags=zmq.SNDMORE)
+            socket.send(serialized_payload, flags=zmq.SNDMORE)
             for frame in extra_frames[:-1]:
-                self._req_socket.send(frame, flags=zmq.SNDMORE, copy=True)
-            self._req_socket.send(extra_frames[-1], copy=True)
-        return self._req_socket.recv_string()
+                socket.send(frame, flags=zmq.SNDMORE, copy=True)
+            socket.send(extra_frames[-1], copy=True)
+
+        response: str = self._req_socket.recv_string() if wait_for_response else "OK"
+        return response
 
     @ensure_connected
     def estimate_client_to_remote_clock_offset(

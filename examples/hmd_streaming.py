@@ -21,17 +21,21 @@ def main(address: str, port: int, frame_rate_hz: int):
         )
 
     with contextlib.suppress(KeyboardInterrupt):
-        increasing_index = 0
-        while True:
-            send_image(
-                device,
-                gray_image(increasing_index),
-                frame_topic,
-                increasing_index,
-                timestamp=device.current_pupil_time(),
-            )
-            increasing_index += 1
-            time.sleep(1 / frame_rate_hz)
+        # Enable sending messages directly to the IPC backbone instead of having
+        # Pupil Remote forward every message one by one and waiting for a response each
+        # time. This allows sending messages with a much higher rate.
+        with device.high_frequency_message_sending():
+            increasing_index = 0
+            while True:
+                send_image(
+                    device,
+                    gray_image(increasing_index),
+                    frame_topic,
+                    increasing_index,
+                    timestamp=device.current_pupil_time(),
+                )
+                increasing_index += 1
+                time.sleep(1 / frame_rate_hz)
 
 
 def send_image(device: pcnc.Device, image, topic: str, index: int, timestamp: float):
